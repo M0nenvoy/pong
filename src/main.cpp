@@ -20,7 +20,7 @@ void render() {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    // glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 GLuint compile_shader(const char *const source, GLint length, GLuint type) {
@@ -101,6 +101,7 @@ GLuint setup_VAO() {
         { -0.5f, -0.5f, 0.0f },
         {  0.0f,  0.5f, 0.0f },
         {  0.5f, -0.5f, 0.0f },
+        {  0.5f,  0.5f, 0.0f },
     };
 
     GLuint VAO;
@@ -131,7 +132,6 @@ void fetch_errors() {
 // Update window's viewport after resizing
 void resize_callback(GLFWwindow* window, int w, int h) {
     glViewport(0, 0, w, h);
-    printf("** resize **");
 }
 
 
@@ -160,10 +160,11 @@ int main(int argc, char **argv) {
 
     // Window
     GLFWwindow* window;
-    glfwSetFramebufferSizeCallback(window, resize_callback);
 
     int status = setup_opengl(window);
     if (status) return terminate(status);
+
+    glfwSetFramebufferSizeCallback(window, resize_callback);
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -176,10 +177,18 @@ int main(int argc, char **argv) {
 
     fetch_errors();
 
+    unsigned int indicies[] = {
+        0, 1, 2,
+        1, 2, 3,
+    };
+
     while (!glfwWindowShouldClose(window)) {
         glUseProgram(shader_program);
         glBindVertexArray(VAO);
         render();
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, indicies);
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
