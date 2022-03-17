@@ -4,13 +4,13 @@
 
 
 int source_file(FILE * __restrict file, char* __restrict ptr, int & n) {
-    int i = 0;
+    n = 0;
     int c;
     while ( (c = fgetc(file)) && c != EOF ) {
-        ptr[i++] = c;
+        ptr[n++] = c;
     }
     // Zero temrminate
-    ptr[i] = 0;
+    ptr[n] = 0;
     return 0;
 }
 

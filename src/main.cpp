@@ -11,6 +11,10 @@ Resource RESOURCE;
 
 static float BG_COLOR[] = {0.2f, 0.2f, 0.2f, 1.0f};
 
+int terminate(int status) {
+    glfwTerminate();
+    return status;
+}
 
 void render() {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
@@ -19,10 +23,22 @@ void render() {
     // glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-GLuint compile_shader(const char *const source, int length, GLuint type) {
+GLuint compile_shader(const char *const source, GLint length, GLuint type) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, &length);
     glCompileShader(shader);
+
+    int success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+
+    if (!success) {
+        char error_desc[512];
+        glGetShaderInfoLog(shader, 512, nullptr, error_desc);
+        fprintf(stderr, "ERROR:SHADER:COMPILE %s\n", error_desc);
+        fprintf(stderr, "%s\n", source);
+
+        return 0;
+    }
 
     return shader;
 }
@@ -32,8 +48,8 @@ int setup_shaders() {
     char* shader_v = (char*) malloc(512);
     char* shader_f = (char*) malloc(512);
 
-    int vbytes; // Bytes of vertex shader
-    int fbytes; // Bytes of frag   shader
+    GLint vbytes; // Bytes of vertex shader
+    GLint fbytes; // Bytes of frag   shader
 
     GLuint shf; // Handle to a fragment shader
     GLuint shv; // Handle to a vertex shader
@@ -48,12 +64,16 @@ int setup_shaders() {
         if (status) goto OUT;
     }
     shf = compile_shader(shader_f, fbytes, GL_FRAGMENT_SHADER);
+    if (!shf) { status = -5; goto OUT; }
     shv = compile_shader(shader_v, vbytes, GL_VERTEX_SHADER);
+    if (!shv) { status = -6; goto OUT; }
 
     program = glCreateProgram();
     glAttachShader(program, shv);
     glAttachShader(program, shf);
     glLinkProgram(program);
+
+    glUseProgram(program);
 
     // Goto clean
 OUT:
@@ -77,6 +97,8 @@ GLuint setup_VAO() {
     glBindBuffer(GL_ARRAY_BUFFER, VAO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verticies), verticies, GL_STATIC_DRAW);
 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 0, verticies);
+    glEnableVertexAttribArray(0);
 
     return VAO;
 }
@@ -85,9 +107,8 @@ GLuint setup_VAO() {
 // Supply the path to the 'resources' folder via command line
 // arguments.
 int main(int argc, char **argv) {
-    /*
     if (argc < 2) {
-        fputs("Usage: app <path/to/the/resource_dir>", stderr);
+        fputs("Usage: app <path/to/the/resource_dir>\n", stderr);
         return -1;
     }
 
@@ -106,16 +127,16 @@ int main(int argc, char **argv) {
         memcpy(RESOURCE.DIR, argv[1], bytes);
     }
 
-    */
-
     // Window
     GLFWwindow* window;
 
     int status = setup_opengl(window);
-    if (status) return status;
+    if (status) return terminate(status);
 
     setup_VAO();
-    // setup_shaders();
+
+    status = setup_shaders();
+    if (status) return terminate(status);
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
@@ -124,4 +145,6 @@ int main(int argc, char **argv) {
         glfwPollEvents();
         glfwSwapBuffers(window);
     }
+
+    terminate(0);
 }
