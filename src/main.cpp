@@ -110,10 +110,10 @@ int main(int argc, char **argv) {
 
     // Window
     GLFWwindow* window;
-    {
-        int status = setup_opengl(window);
-        if (status) return status;
-    }
+
+    int status = setup_opengl(window);
+    if (status) return status;
+
     setup_VAO();
     // setup_shaders();
 

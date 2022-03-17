@@ -4,7 +4,7 @@
 #include <malloc.h>
 
 /// Setup the boilerplate
-int setup_opengl(GLFWwindow* window) {
+int setup_opengl(GLFWwindow*& window) {
     printf("Initiating glfw...\n");
     if (!glfwInit()) {
         fputs("ERROR:GLFW:INIT", stderr);
