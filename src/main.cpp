@@ -93,30 +93,54 @@ OUT:
     return status;
 }
 
-// @returns VAO id
-GLuint setup_VAO() {
-    GLuint VBO;
+template <typename GLType>
+void VBO(GLuint layout_id, GLuint VBO, GLuint component_type, GLType verticies[], int arrsize, int component_size, int stride, long int offset = 0) {
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, arrsize, verticies, GL_STATIC_DRAW);
+    glVertexAttribPointer(layout_id, component_size, GL_FLOAT, GL_FALSE, stride, (void*) offset);
+    glEnableVertexAttribArray(layout_id);
+}
 
-    glm::vec3 verticies[] = {
-        { -0.5f, -0.5f, 0.0f },
-        {  0.0f,  0.5f, 0.0f },
-        {  0.5f, -0.5f, 0.0f },
+// @returns VAO id
+GLuint* setup_VAO() {
+    GLuint *VAO, *VBOp, VBOc, EBO;
+    VAO     = (GLuint*) malloc(sizeof(GLuint) * 2);
+    VBOp    = (GLuint*) malloc(sizeof(GLuint) * 2);
+
+    /// Triangle 1
+    glm::vec3 t1[] = {
+        {  0.0f, -0.5f, 0.0f },
+        { -0.5f,  0.5f, 0.0f },
         {  0.5f,  0.5f, 0.0f },
     };
 
-    GLuint VAO;
-    glGenVertexArrays(1, &VAO);
+    /// Trianle 2
+    glm::vec3 t2[] = {
+        { -0.8f, -0.5f, 0.0f },
+        { -0.8f,  0.5f, 0.0f },
+        { -0.6f,  0.5f, 0.0f },
+    };
 
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
+    glm::vec3 clr[] = {
+        {  1.0f,  0.0f, 0.0f }, // Red color
+        {  0.0f,  1.0f, 0.0f }, // Green color
+        {  0.0f,  0.0f, 1.0f }, // Blue color
+    };
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verticies), verticies, GL_STATIC_DRAW);
+    glGenVertexArrays(2, VAO);
+    glGenBuffers(2, VBOp);
+    glGenBuffers(1, &VBOc);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
-    glEnableVertexAttribArray(0);
+    glBindVertexArray(VAO[0]);
+    VBO(0, VBOp[0], GL_FLOAT, t1, sizeof(t1), 3, sizeof(float) * 3);
+    VBO(1, VBOc, GL_FLOAT, clr, sizeof(clr), 3, sizeof(float) * 3);
+
+    glBindVertexArray(VAO[1]);
+    VBO(0, VBOp[1], GL_FLOAT, t2, sizeof(t2), 3, sizeof(float) * 3);
+    VBO(1, VBOc, GL_FLOAT, clr, sizeof(clr), 3, sizeof(float) * 3);
 
     glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     return VAO;
 }
@@ -168,7 +192,9 @@ int main(int argc, char **argv) {
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
-    int VAO = setup_VAO();
+    GLuint* VAO = setup_VAO();
+    int VAO0 = VAO[0];
+    int VAO1 = VAO[1];
 
     GLuint shader_program;
 
@@ -177,18 +203,16 @@ int main(int argc, char **argv) {
 
     fetch_errors();
 
-    unsigned int indicies[] = {
-        0, 1, 2,
-        1, 2, 3,
-    };
-
     while (!glfwWindowShouldClose(window)) {
         glUseProgram(shader_program);
-        glBindVertexArray(VAO);
         render();
 
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, indicies);
-        
+        glBindVertexArray(VAO1);
+        glDrawArrays(GL_TRIANGLES, 0, 12);
+
+        glBindVertexArray(VAO0);
+        glDrawArrays(GL_TRIANGLES, 0, 12);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
