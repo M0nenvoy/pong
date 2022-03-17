@@ -2,27 +2,21 @@
 #include <string.h>
 #include <malloc.h>
 
-#include <GL/eglew.h>
-#include <GLFW/glfw3.h>
-
 #include <glm/vec3.hpp>
 
 #include "util/file.h"
+#include "setup_opengl.h"
 
 Resource RESOURCE;
 
 static float BG_COLOR[] = {0.2f, 0.2f, 0.2f, 1.0f};
 
-// Window
-constexpr int WIDTH     = 400;
-constexpr int HEIGHT    = 300;
-constexpr char const* TITLE = "Sample text";
 
 void render() {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    // glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 GLuint compile_shader(const char *const source, int length, GLuint type) {
@@ -114,48 +108,17 @@ int main(int argc, char **argv) {
 
     */
 
-    printf("Initiating glfw...\n");
-    if (!glfwInit()) {
-        fputs("ERROR:GLFW:INIT", stderr);
-        return -1;
+    // Window
+    GLFWwindow* window;
+    {
+        int status = setup_opengl(window);
+        if (status) return status;
     }
-
-    printf("Creating the glfw window");
-
-    glfwWindowHint(GLFW_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_VERSION_MINOR, 3);
-    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow * window = glfwCreateWindow(WIDTH, HEIGHT, TITLE, nullptr, nullptr);
-    if (!window) {
-        fputs("ERROR:GLFW:CREATE_WINDOW\n", stderr);
-        const char** error_desc = (const char**)malloc(1);
-        error_desc[0] = (const char*) malloc(512);
-
-        glfwGetError(error_desc);
-        fprintf(stderr, "%s\n", error_desc[0]);
-        return -2;
-    }
-
-
-    glfwMakeContextCurrent(window);
-    printf("OpenGL version: %s\n", glGetString(GL_VERSION));
-
-    glewExperimental = true;
-
-    printf("Initiating glew...\n");
-    GLenum error = glewInit();
-    if (error != GLEW_OK) {
-        fputs("ERROR:GLEW:INIT\n", stderr);
-        const GLubyte* error_desc = glewGetErrorString(error);
-        fprintf(stderr, "Error desc: %s\n", error_desc);
-        return -3;
-    }
-
     setup_VAO();
     // setup_shaders();
 
     glViewport(0, 0, WIDTH, HEIGHT);
+
     while (!glfwWindowShouldClose(window)) {
         render();
         glfwPollEvents();
