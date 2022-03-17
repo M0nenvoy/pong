@@ -128,6 +128,12 @@ void fetch_errors() {
     }
 }
 
+// Update window's viewport after resizing
+void resize_callback(GLFWwindow* window, int w, int h) {
+    glViewport(0, 0, w, h);
+    printf("** resize **");
+}
+
 
 // Supply the path to the 'resources' folder via command line
 // arguments.
@@ -154,6 +160,7 @@ int main(int argc, char **argv) {
 
     // Window
     GLFWwindow* window;
+    glfwSetFramebufferSizeCallback(window, resize_callback);
 
     int status = setup_opengl(window);
     if (status) return terminate(status);
