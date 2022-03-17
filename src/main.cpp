@@ -20,7 +20,7 @@ void render() {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 GLuint compile_shader(const char *const source, GLint length, GLuint type) {
@@ -43,7 +43,7 @@ GLuint compile_shader(const char *const source, GLint length, GLuint type) {
     return shader;
 }
 
-int setup_shaders() {
+int setup_shaders(GLuint *shader_program) {
     // Vertex shader
     char* shader_v = (char*) malloc(512);
     char* shader_f = (char*) malloc(512);
@@ -73,6 +73,14 @@ int setup_shaders() {
     glAttachShader(program, shf);
     glLinkProgram(program);
 
+    int success;
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        char infoLog[512];
+        glGetProgramInfoLog(program, 512, nullptr, infoLog);
+        fprintf(stderr, "ERROR:SHADER:LINK %s\n", infoLog);
+    }
+
     glUseProgram(program);
 
     // Goto clean
@@ -80,27 +88,44 @@ OUT:
     free(shader_v);
     free(shader_f);
 
+    *shader_program = program;
+
     return status;
 }
 
 // @returns VAO id
 GLuint setup_VAO() {
-    GLuint VAO;
-    glGenBuffers(1, &VAO);
+    GLuint VBO;
 
     glm::vec3 verticies[] = {
-        { -0.5f, -0.5f, 1.0f },
-        {  0.0f,  0.5f, 1.0f },
-        {  0.5f, -0.5f, 1.0f },
+        { -0.5f, -0.5f, 0.0f },
+        {  0.0f,  0.5f, 0.0f },
+        {  0.5f, -0.5f, 0.0f },
     };
 
-    glBindBuffer(GL_ARRAY_BUFFER, VAO);
+    GLuint VAO;
+    glGenVertexArrays(1, &VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verticies), verticies, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_TRUE, 0, verticies);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
     glEnableVertexAttribArray(0);
 
+    glBindVertexArray(0);
+
     return VAO;
+}
+
+void fetch_errors() {
+    fputs("Fetching errors...\n", stderr);
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        fprintf(stderr, "%x\n", err);
+    }
 }
 
 
@@ -133,17 +158,23 @@ int main(int argc, char **argv) {
     int status = setup_opengl(window);
     if (status) return terminate(status);
 
-    setup_VAO();
-
-    status = setup_shaders();
-    if (status) return terminate(status);
-
     glViewport(0, 0, WIDTH, HEIGHT);
 
+    int VAO = setup_VAO();
+
+    GLuint shader_program;
+
+    status = setup_shaders(&shader_program);
+    if (status) return terminate(status);
+
+    fetch_errors();
+
     while (!glfwWindowShouldClose(window)) {
+        glUseProgram(shader_program);
+        glBindVertexArray(VAO);
         render();
-        glfwPollEvents();
         glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
     terminate(0);
