@@ -3,11 +3,51 @@
 #include <malloc.h>
 
 #include <glm/vec3.hpp>
+#include <glm/vec2.hpp>
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 
 #include "util/file.h"
 #include "setup_opengl.h"
 
 Resource RESOURCE;
+
+/// Triangle 1
+glm::vec3 t1[] = {
+    {  0.0f, -0.5f, 0.0f },
+    { -0.5f,  0.5f, 0.0f },
+    {  0.5f,  0.5f, 0.0f },
+};
+
+/// Trianle 2
+glm::vec3 t2[] = {
+    { -0.8f, -0.5f, 0.0f },
+    { -0.8f,  0.5f, 0.0f },
+    { -0.6f,  0.5f, 0.0f },
+};
+
+/// Rectangle
+glm::vec3 RECTANGLE[] = {
+    { -0.5f, -0.5f, 0.0f }, // Top left
+    { -0.5f,  0.5f, 0.0f }, // Bottom left
+    {  0.5f,  0.5f, 0.0f }, // Bottom right
+    {  0.5f, -0.5f, 0.0f }, // Top right
+};
+
+glm::vec3 tlmotion(glm::vec3 v, float gravity) {
+    glm::vec3 k = { 0.0f, 0.0f, 1.0f };
+    glm::vec3 copy = v;
+    glm::normalize(v);
+    glm::vec3 cross = glm::cross(v, k);
+    return copy + cross * gravity;
+}
+
+glm::vec3 clr[] = {
+    {  1.0f,  0.0f, 0.0f }, // Red color
+    {  0.0f,  1.0f, 0.0f }, // Green color
+    {  0.0f,  0.0f, 1.0f }, // Blue color
+    {  1.0f,  1.0f, 1.0f }, // White color
+};
 
 static float BG_COLOR[] = {0.2f, 0.2f, 0.2f, 1.0f};
 
@@ -16,11 +56,12 @@ int terminate(int status) {
     return status;
 }
 
-void render() {
+void render(int VAO0, int VAO1) {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 3);
+    glBindVertexArray(VAO0);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
 }
 
 GLuint compile_shader(const char *const source, GLint length, GLuint type) {
@@ -93,56 +134,83 @@ OUT:
     return status;
 }
 
-template <typename GLType>
-void VBO(GLuint layout_id, GLuint VBO, GLuint component_type, GLType verticies[], int arrsize, int component_size, int stride, long int offset = 0) {
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, arrsize, verticies, GL_STATIC_DRAW);
-    glVertexAttribPointer(layout_id, component_size, GL_FLOAT, GL_FALSE, stride, (void*) offset);
-    glEnableVertexAttribArray(layout_id);
-}
+struct VBO {
+    GLuint      layout_id;
+    GLuint      handle;
+    GLuint      component_type;
+    int         arrsize;
+    int         component_size;
+    int         stride;
+    void*       verticies;
+    long int    offset = 0;
+    GLuint      draw_mode = GL_STATIC_DRAW;
 
-// @returns VAO id
-GLuint* setup_VAO() {
-    GLuint *VAO, *VBOp, VBOc, EBO;
-    VAO     = (GLuint*) malloc(sizeof(GLuint) * 2);
-    VBOp    = (GLuint*) malloc(sizeof(GLuint) * 2);
+    void init() {
+        glBindBuffer(GL_ARRAY_BUFFER, handle);
+        glBufferData(GL_ARRAY_BUFFER, arrsize, verticies, draw_mode);
+        glVertexAttribPointer(layout_id, component_size, GL_FLOAT, GL_FALSE, stride, (void*) offset);
+        glEnableVertexAttribArray(layout_id);
+    }
+};
 
-    /// Triangle 1
-    glm::vec3 t1[] = {
-        {  0.0f, -0.5f, 0.0f },
-        { -0.5f,  0.5f, 0.0f },
-        {  0.5f,  0.5f, 0.0f },
-    };
+/// @returns VBO array pointer
+struct VBO*
+setup_VAO(GLuint VAO[2]) {
+    GLuint VBOp[2], VBOc, EBO;
 
-    /// Trianle 2
-    glm::vec3 t2[] = {
-        { -0.8f, -0.5f, 0.0f },
-        { -0.8f,  0.5f, 0.0f },
-        { -0.6f,  0.5f, 0.0f },
-    };
-
-    glm::vec3 clr[] = {
-        {  1.0f,  0.0f, 0.0f }, // Red color
-        {  0.0f,  1.0f, 0.0f }, // Green color
-        {  0.0f,  0.0f, 1.0f }, // Blue color
-    };
+    struct VBO * VBOs = (struct VBO*) malloc((sizeof(struct VBO) * 3));
 
     glGenVertexArrays(2, VAO);
-    glGenBuffers(2, VBOp);
+    glGenBuffers(3, VBOp);
     glGenBuffers(1, &VBOc);
+    glGenBuffers(1, &EBO);
+
+    GLuint indicies[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+    /// Rectangle points
+    VBOs[0] = {
+        .layout_id      = 0,
+        .handle         = VBOp[1],
+        .component_type = GL_FLOAT,
+        .arrsize        = sizeof(RECTANGLE),
+        .component_size = 3,
+        .stride         = sizeof(float) * 3,
+        .verticies      = RECTANGLE,
+        .draw_mode      = GL_DYNAMIC_DRAW,
+    };
+
+    /// Rectangle colors
+    VBOs[1] = {
+        .layout_id      = 1,
+        .handle         = VBOc,
+        .component_type = GL_FLOAT,
+        .arrsize        = sizeof(clr),
+        .component_size = 3,
+        .stride         = sizeof(float) * 3,
+        .verticies      = clr,
+        .draw_mode      = GL_DYNAMIC_DRAW,
+    };
+
+    // Bind vertex array
+    // glBindVertexArray(VAO[0]);
+    // vbop1.bind();
+    // vboc.bind();
+
+    // Setup EBO
 
     glBindVertexArray(VAO[0]);
-    VBO(0, VBOp[0], GL_FLOAT, t1, sizeof(t1), 3, sizeof(float) * 3);
-    VBO(1, VBOc, GL_FLOAT, clr, sizeof(clr), 3, sizeof(float) * 3);
+    VBOs[0].init();
+    VBOs[1].init();
 
-    glBindVertexArray(VAO[1]);
-    VBO(0, VBOp[1], GL_FLOAT, t2, sizeof(t2), 3, sizeof(float) * 3);
-    VBO(1, VBOc, GL_FLOAT, clr, sizeof(clr), 3, sizeof(float) * 3);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_DYNAMIC_DRAW);
 
     glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    return VAO;
+    return VBOs;
 }
 
 void fetch_errors() {
@@ -192,7 +260,8 @@ int main(int argc, char **argv) {
 
     glViewport(0, 0, WIDTH, HEIGHT);
 
-    GLuint* VAO = setup_VAO();
+    GLuint VAO[2];
+    struct VBO* vbos = setup_VAO(VAO);
     int VAO0 = VAO[0];
     int VAO1 = VAO[1];
 
@@ -203,19 +272,29 @@ int main(int argc, char **argv) {
 
     fetch_errors();
 
+    glUseProgram(shader_program);
+
+    /// Time at the startup
+    float time0 = glfwGetTime();
+    float gravity = 0.001f;
+    glm::vec3 motion = {0.0f, 1.0f, 0.0f};
+    motion *= gravity;
+
+    float clock_speed = 1.2f;
+    // Render loop
     while (!glfwWindowShouldClose(window)) {
-        glUseProgram(shader_program);
-        render();
+        /// Time since the startup
+        float time = glfwGetTime() - time0;
 
-        glBindVertexArray(VAO1);
-        glDrawArrays(GL_TRIANGLES, 0, 12);
-
-        glBindVertexArray(VAO0);
-        glDrawArrays(GL_TRIANGLES, 0, 12);
-
+        motion = clock_speed * tlmotion(motion, gravity);
+        RECTANGLE[0] += motion;
+        glBindBuffer(GL_ARRAY_BUFFER, vbos[0].handle);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, 3 * sizeof(float), RECTANGLE);
+        render(VAO0, VAO1);
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    free (vbos);
     terminate(0);
 }
