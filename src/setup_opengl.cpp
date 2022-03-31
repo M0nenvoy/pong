@@ -20,11 +20,12 @@ int setup_opengl(GLFWwindow*& window) {
     window = glfwCreateWindow(WIDTH, HEIGHT, TITLE, nullptr, nullptr);
     if (!window) {
         fputs("ERROR:GLFW:CREATE_WINDOW\n", stderr);
-        const char** error_desc = (const char**)malloc(1);
-        error_desc[0] = (const char*) malloc(512);
+        const char* error_desc[1];
+        // error_desc[0] = (const char*) malloc(512);
 
         glfwGetError(error_desc);
         fprintf(stderr, "%s\n", error_desc[0]);
+
         return -2;
     }
 

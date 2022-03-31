@@ -5,49 +5,157 @@
 #include <glm/vec3.hpp>
 #include <glm/vec2.hpp>
 #include <glm/geometric.hpp>
-#include <glm/trigonometric.hpp>
 
 #include "util/file.h"
 #include "setup_opengl.h"
+#include "input.h"
+#include "collision.h"
 
 Resource RESOURCE;
 
-/// Triangle 1
-glm::vec3 t1[] = {
-    {  0.0f, -0.5f, 0.0f },
-    { -0.5f,  0.5f, 0.0f },
-    {  0.5f,  0.5f, 0.0f },
+struct Ball {
+    glm::vec2 pos;
+    glm::vec2 vel;
 };
 
-/// Trianle 2
-glm::vec3 t2[] = {
-    { -0.8f, -0.5f, 0.0f },
-    { -0.8f,  0.5f, 0.0f },
-    { -0.6f,  0.5f, 0.0f },
-};
-
-/// Rectangle
-glm::vec3 RECTANGLE[] = {
-    { -0.5f, -0.5f, 0.0f }, // Top left
-    { -0.5f,  0.5f, 0.0f }, // Bottom left
-    {  0.5f,  0.5f, 0.0f }, // Bottom right
-    {  0.5f, -0.5f, 0.0f }, // Top right
-};
-
-glm::vec3 tlmotion(glm::vec3 v, float gravity) {
-    glm::vec3 k = { 0.0f, 0.0f, 1.0f };
-    glm::vec3 copy = v;
-    glm::normalize(v);
-    glm::vec3 cross = glm::cross(v, k);
-    return copy + cross * gravity;
+/** Convert pixel coordinates to clip coordinates
+ * @param window_size Size of the window along the converted axis
+ */
+inline float to_clip(int coord, int window_size) {
+    return (((float) coord / (float) window_size) - 0.5f) * 2.0f;
 }
 
-glm::vec3 clr[] = {
-    {  1.0f,  0.0f, 0.0f }, // Red color
-    {  0.0f,  1.0f, 0.0f }, // Green color
-    {  0.0f,  0.0f, 1.0f }, // Blue color
-    {  1.0f,  1.0f, 1.0f }, // White color
-};
+/**
+ * Generate the verticies for the rectangle
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param window_w Window width in pixels
+ * @param window_h Window height in pixels
+ * @param posx Position x of the top left pixel
+ * @param posy Position y of the top left pixel
+ * @param ptr store generated verticies here
+ */
+template <typename T>
+void gen_rectangle_verticies(
+        T w,
+        T h,
+        T window_w,
+        T window_h,
+        T posx,
+        T posy,
+        glm::vec3* ptr) {
+
+    float posxcl = to_clip(posx,        window_w); // Left clip position
+    float posxcr = to_clip(posx + w,    window_w); // Right clip position
+    float posyct = to_clip(posy,        window_h); // Top clip position
+    float posycb = to_clip(posy + h,    window_h); // Bottom clip position
+
+    glm::vec3 verticies[4] = {
+        {  posxcl,      posyct,      0.0f },
+        {  posxcl,      posycb,      0.0f },
+        {  posxcr,      posycb,      0.0f },
+        {  posxcr,      posyct,      0.0f },
+    };
+    memcpy(ptr, verticies, sizeof(verticies));
+}
+
+constexpr int PADDLE_W = 10; // Width of the paddle in pixels
+constexpr int PADDLE_H = 50; // Height of the paddle in pixels
+
+constexpr int BALL_W        = 10;
+constexpr int BALL_H        = 10;
+constexpr float BALL_SPEED  = 10.0f;
+constexpr float SPEED_MOD   = 1.2f;
+
+constexpr int PADDING = 30;  // Distance from the edge of the screen in pixels
+
+
+constexpr float PADSPEED = 30.0f;
+/**
+ * Update the paddles according to the current input.
+ * @param lpp Left paddle position vertically
+ * @param rpp Right paddle position vertically
+ * @param delta_time Time between two last updates
+ * @returns If any displacement is present
+ */
+bool update_paddles(Input INPUT, int &lpp, int &rpp, float delta_time) {
+    static float remainder_r {0};
+    static float remainder_l {0};
+
+    float ldisplacement = (INPUT.ldir) * PADSPEED;
+    float rdisplacement = (INPUT.rdir) * PADSPEED;
+
+    float flr_dis = ldisplacement * delta_time + remainder_l; // Real left displacement
+    float frr_dis = rdisplacement * delta_time + remainder_r; // Real right displacement
+
+    int lr_dis = floor(flr_dis);
+    int rr_dis = floor(frr_dis);
+
+    remainder_r = frr_dis - rr_dis;
+    remainder_l = flr_dis - lr_dis;
+                          // + 5 for bias                             // + 5 for the same reason
+    lr_dis *= !(lpp + lr_dis + 5 < 0 || lpp + lr_dis > HEIGHT - PADDLE_H + 5);    // Don't get out of the screen
+    rr_dis *= !(rpp + rr_dis + 5 < 0 || rpp + rr_dis > HEIGHT - PADDLE_H + 5);    // Don't get out of the screen
+
+    lpp += lr_dis;
+    rpp += rr_dis;
+
+    return (lr_dis != 0 || rr_dis != 0);
+}
+
+void update_ball(Ball* ball, int lpad, int rpad, float delta_time) {
+
+    // Move the ball->with its velocity
+    ball->pos += ball->vel * delta_time;
+
+    AABB ball_aabb      = { ball->pos, { BALL_W, BALL_H } };
+    AABB lpaddle_aabb   = { { PADDING, lpad }, {PADDLE_W, PADDLE_H} };
+    AABB rpaddle_aabb   = { { WIDTH - PADDING - PADDLE_W, rpad }, {PADDLE_W, PADDLE_H} };
+    // Check if the ball->collided with the left paddle
+    // if (ball->vel.x < 0 && ball->pos.x < PADDING + PADDLE_W                // Collide horizontally
+    //     && (ball->pos.y < lpad + PADDLE_H && ball->pos.y + BALL_H > lpad)) // Collide vertically
+    // {
+    //     ball->vel.x = -ball->vel.x;
+    //     return;
+    if (collision(ball_aabb, lpaddle_aabb)) {
+        ball->vel.x = -ball->vel.x;
+        glm::vec2 random_v = { ball->vel.x, ball->vel.y };
+        ball->vel += random_v;
+    }
+    if (collision(ball_aabb, rpaddle_aabb)) {
+        ball->vel.x = SPEED_MOD * -ball->vel.x;
+    }
+    // }
+    // Check if the ball->collided with the right paddle
+    // if (ball->vel.x > 0 && ball->pos.x + BALL_W > (WIDTH - PADDING - PADDLE_W)      // Collidre horizontally
+    //     && (ball->pos.y < rpad + PADDLE_H && ball->pos.y + BALL_H > rpad))          // Collide vertically
+    // {
+    //     ball->vel.x = -ball->vel.x;
+    //     return;
+    // }
+
+    // Check if the ball->collided with the ceiling
+    if (ball->pos.y < 0) {
+        ball->vel.y = -ball->vel.y;
+        return;
+    }
+    // Check if the ball->collided with the floor
+    if (ball->pos.y + BALL_H > HEIGHT) {
+        ball->vel.y = -ball->vel.y;
+        return;
+    }
+}
+
+/// Set the positions of all the objects to the default ones
+void reset(int & lpad, int & rpad, Ball * ball) {
+    lpad = (HEIGHT - PADDLE_H) >> 1;
+    rpad = lpad;
+
+    ball->pos.x = (float) ((WIDTH  - BALL_W) >> 1);
+    ball->pos.y = (float) ((HEIGHT - BALL_H) >> 1);
+    // Reset the velocity of a ball
+    ball->vel = glm::vec2(-1.0f) * BALL_SPEED;
+}
 
 static float BG_COLOR[] = {0.2f, 0.2f, 0.2f, 1.0f};
 
@@ -56,12 +164,13 @@ int terminate(int status) {
     return status;
 }
 
-void render(int VAO0, int VAO1) {
+void render(int VAO) {
     glClearColor(BG_COLOR[0], BG_COLOR[1], BG_COLOR[2], BG_COLOR[3]);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glBindVertexArray(VAO0);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, 18, GL_UNSIGNED_INT, nullptr);
+    // glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
 GLuint compile_shader(const char *const source, GLint length, GLuint type) {
@@ -94,7 +203,7 @@ int setup_shaders(GLuint *shader_program) {
 
     GLuint shf; // Handle to a fragment shader
     GLuint shv; // Handle to a vertex shader
-    GLuint program; // Handle to a shader program
+    GLuint program = 0; // Handle to a shader program
 
     int status;
     {
@@ -153,64 +262,55 @@ struct VBO {
     }
 };
 
-/// @returns VBO array pointer
-struct VBO*
-setup_VAO(GLuint VAO[2]) {
-    GLuint VBOp[2], VBOc, EBO;
+/**
+ * @param verticies Verticies containing two paddles and a ball
+ * @param size size of verticies
+ */
+GLuint
+setup_VAO(VBO& vbo, glm::vec3* verticies, int size) {
+    GLuint VBOhandle, EBO;
 
-    struct VBO * VBOs = (struct VBO*) malloc((sizeof(struct VBO) * 3));
-
-    glGenVertexArrays(2, VAO);
-    glGenBuffers(3, VBOp);
-    glGenBuffers(1, &VBOc);
+    GLuint VAO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBOhandle);
     glGenBuffers(1, &EBO);
 
+    glBindVertexArray(VAO);
+
     GLuint indicies[] = {
+        // Left paddle
         0, 1, 2,
-        2, 3, 0
+        2, 3, 0,
+
+        // Right paddle
+        4, 5, 6,
+        6, 7, 4,
+
+        // Ball
+        8, 9, 10,
+        10, 11, 8
     };
 
     /// Rectangle points
-    VBOs[0] = {
+    vbo = {
         .layout_id      = 0,
-        .handle         = VBOp[1],
+        .handle         = VBOhandle,
         .component_type = GL_FLOAT,
-        .arrsize        = sizeof(RECTANGLE),
+        .arrsize        = size,
         .component_size = 3,
         .stride         = sizeof(float) * 3,
-        .verticies      = RECTANGLE,
+        .verticies      = verticies,
         .draw_mode      = GL_DYNAMIC_DRAW,
     };
 
-    /// Rectangle colors
-    VBOs[1] = {
-        .layout_id      = 1,
-        .handle         = VBOc,
-        .component_type = GL_FLOAT,
-        .arrsize        = sizeof(clr),
-        .component_size = 3,
-        .stride         = sizeof(float) * 3,
-        .verticies      = clr,
-        .draw_mode      = GL_DYNAMIC_DRAW,
-    };
-
-    // Bind vertex array
-    // glBindVertexArray(VAO[0]);
-    // vbop1.bind();
-    // vboc.bind();
-
-    // Setup EBO
-
-    glBindVertexArray(VAO[0]);
-    VBOs[0].init();
-    VBOs[1].init();
+    vbo.init();
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_DYNAMIC_DRAW);
 
     glBindVertexArray(0);
 
-    return VBOs;
+    return VAO;
 }
 
 void fetch_errors() {
@@ -257,44 +357,87 @@ int main(int argc, char **argv) {
     if (status) return terminate(status);
 
     glfwSetFramebufferSizeCallback(window, resize_callback);
+    glfwSetKeyCallback(window, key_callback);
 
-    glViewport(0, 0, WIDTH, HEIGHT);
+    glm::vec3 verticies[12];
 
-    GLuint VAO[2];
-    struct VBO* vbos = setup_VAO(VAO);
-    int VAO0 = VAO[0];
-    int VAO1 = VAO[1];
+    // Setup the paddles and the ball
+    int lpad, rpad; // Positions of the top left pixel of the left and the right paddle
+    Ball ball;
 
+    reset(lpad, rpad, &ball);
+
+    // Left paddle
+    gen_rectangle_verticies(
+        PADDLE_W,
+        PADDLE_H,
+        WIDTH,
+        HEIGHT,
+        PADDING,
+        lpad,
+        verticies);
+
+    // Right paddle
+    gen_rectangle_verticies(
+        PADDLE_W,
+        PADDLE_H,
+        WIDTH,
+        HEIGHT,
+        WIDTH - PADDING - PADDLE_W,
+        rpad,
+        verticies + 4);
+    // Ball
+    gen_rectangle_verticies<float>(
+        BALL_W,
+        BALL_H,
+        WIDTH,
+        HEIGHT,
+        ball.pos.x,
+        ball.pos.y,
+        verticies + 8);
+
+    VBO vbo;
+    GLuint VAOhandle = setup_VAO(vbo, verticies, sizeof(verticies));
     GLuint shader_program;
 
     status = setup_shaders(&shader_program);
     if (status) return terminate(status);
 
-    fetch_errors();
-
     glUseProgram(shader_program);
 
-    /// Time at the startup
+    // Time at the startup
     float time0 = glfwGetTime();
-    float gravity = 0.001f;
-    glm::vec3 motion = {0.0f, 1.0f, 0.0f};
-    motion *= gravity;
+    float time = 0;
 
-    float clock_speed = 1.2f;
+    fetch_errors();
     // Render loop
     while (!glfwWindowShouldClose(window)) {
-        /// Time since the startup
-        float time = glfwGetTime() - time0;
+        if (INPUT.should_restart) reset(lpad, rpad, &ball);
+        // Time since the startup
+        float delta_time = glfwGetTime() - time;
+        time = glfwGetTime() - time0;
 
-        motion = clock_speed * tlmotion(motion, gravity);
-        RECTANGLE[0] += motion;
-        glBindBuffer(GL_ARRAY_BUFFER, vbos[0].handle);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 3 * sizeof(float), RECTANGLE);
-        render(VAO0, VAO1);
+        update_paddles(INPUT, lpad, rpad, delta_time);
+        update_ball(&ball, lpad, rpad, delta_time);
+
+        // Left paddle
+        gen_rectangle_verticies(PADDLE_W, PADDLE_H, WIDTH, HEIGHT, PADDING, lpad, verticies);
+
+        // Right paddle
+        gen_rectangle_verticies(PADDLE_W, PADDLE_H, WIDTH, HEIGHT, WIDTH - PADDING - PADDLE_W, rpad, verticies + 4);
+
+        // Ball
+        gen_rectangle_verticies<float>(BALL_W, BALL_H, WIDTH, HEIGHT, ball.pos.x, ball.pos.y, verticies + 8);
+
+        // Supply VBO with new data
+        glBindBuffer(GL_ARRAY_BUFFER, vbo.handle);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verticies), verticies);
+
+        render(VAOhandle);
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    free (vbos);
     terminate(0);
 }

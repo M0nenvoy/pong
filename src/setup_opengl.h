@@ -4,8 +4,8 @@
 #include <GLFW/glfw3.h>
 
 /// Window properties
-constexpr int WIDTH         = 400;
-constexpr int HEIGHT        = 300;
+constexpr int WIDTH         = 800;
+constexpr int HEIGHT        = 450;
 constexpr char const* TITLE = "Sample text";
 
 int setup_opengl(GLFWwindow*& window);

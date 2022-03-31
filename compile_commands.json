@@ -1,0 +1,66 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-g",
+      "-I",
+      "include/",
+      "-Wall",
+      "-c",
+      "-o",
+      "src/main.o",
+      "src/main.cpp"
+    ],
+    "directory": "/home/golds/programming/c++/opengl-study",
+    "file": "/home/golds/programming/c++/opengl-study/src/main.cpp",
+    "output": "/home/golds/programming/c++/opengl-study/src/main.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-g",
+      "-I",
+      "include/",
+      "-Wall",
+      "-c",
+      "-o",
+      "src/util/file.o",
+      "src/util/file.cpp"
+    ],
+    "directory": "/home/golds/programming/c++/opengl-study",
+    "file": "/home/golds/programming/c++/opengl-study/src/util/file.cpp",
+    "output": "/home/golds/programming/c++/opengl-study/src/util/file.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-g",
+      "-I",
+      "include/",
+      "-Wall",
+      "-c",
+      "-o",
+      "src/setup_opengl.o",
+      "src/setup_opengl.cpp"
+    ],
+    "directory": "/home/golds/programming/c++/opengl-study",
+    "file": "/home/golds/programming/c++/opengl-study/src/setup_opengl.cpp",
+    "output": "/home/golds/programming/c++/opengl-study/src/setup_opengl.o"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-g",
+      "-I",
+      "include/",
+      "-Wall",
+      "-c",
+      "-o",
+      "src/input.o",
+      "src/input.cpp"
+    ],
+    "directory": "/home/golds/programming/c++/opengl-study",
+    "file": "/home/golds/programming/c++/opengl-study/src/input.cpp",
+    "output": "/home/golds/programming/c++/opengl-study/src/input.o"
+  }
+]
